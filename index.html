@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clair de Lune — Visual Synth — k-eis</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  /* Lune（月）: 深い藍色・静謐 */
+  --bg: #10141c;
+  --ink: #e8e6de;
+  --line: #2a3040;
+  --line-strong: #3d4658;
+  --accent: #8ca8c8;
+  --accent2: #d4c896;
+  --canvas-check-a: #161c28;
+  --canvas-check-b: #10141c;
+  --mono: 'Courier New', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ── THEME: CLAIR（光）明るい方 ── */
+body.theme-clair {
+  --bg: #f7f4ec;
+  --ink: #2a2620;
+  --line: #e4ddc8;
+  --line-strong: #cfc4a4;
+  --accent: #c9a24a;
+  --accent2: #7ba8c4;
+  --canvas-check-a: #efe8d4;
+  --canvas-check-b: #f7f4ec;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  min-height: 100vh;
+  transition: background 0.3s, color 0.3s;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 32px 80px;
+}
+
+/* ── ヘッダー ── */
+header {
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 22px;
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.filter-tag {
+  font: 600 10px/1 var(--mono);
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  margin-bottom: 10px;
+}
+h1 {
+  font: 300 32px/1.1 var(--sans);
+  letter-spacing: -0.01em;
+}
+h1 .jp {
+  font-size: 15px;
+  color: #77746a;
+  font-weight: 400;
+  margin-left: 10px;
+}
+body.theme-lune h1 .jp { color: #8892a8; }
+
+.tagline {
+  font: 400 12px/1.6 var(--sans);
+  color: #77746a;
+  margin-top: 6px;
+}
+body.theme-lune .tagline { color: #8892a8; }
+
+.version {
+  font: 400 9px/1 var(--mono);
+  color: #a8a498;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+/* ── テーマ切り替え ── */
+.theme-switcher {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.theme-label {
+  font: 500 9px/1 var(--mono);
+  color: #a8a498;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.theme-options { display: flex; gap: 6px; flex-wrap: wrap; }
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font: 500 9.5px/1 var(--sans);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.theme-btn:hover { border-color: var(--accent); }
+.theme-btn.active { background: var(--accent); border-color: var(--accent); color: #10141c; }
+.theme-btn .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* ── メインレイアウト ── */
+.stage {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+}
+
+.canvas-area {
+  position: relative;
+  background:
+    linear-gradient(45deg, var(--canvas-check-a) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--canvas-check-a) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--canvas-check-a) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--canvas-check-a) 75%);
+  background-color: var(--canvas-check-b);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  border-right: 1px solid var(--line-strong);
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#dropZone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#dropZone.drag-over { background: rgba(140,168,200,0.08); }
+#dropZone .icon {
+  width: 40px; height: 40px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  position: relative;
+}
+#dropZone .icon::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  transform: translate(-50%,-50%);
+  opacity: 0.5;
+}
+#dropZone .label-main { font: 500 12px/1 var(--sans); color: var(--ink); text-align: center; }
+#dropZone .label-sub { font: 400 9px/1 var(--mono); color: #8a8880; letter-spacing: 0.08em; }
+#fileInput { display: none; }
+
+canvas#outputCanvas { max-width: 100%; max-height: 640px; display: none; }
+
+.canvas-badge {
+  position: absolute;
+  top: 14px; left: 14px;
+  font: 500 9px/1 var(--mono);
+  color: var(--ink);
+  background: rgba(0,0,0,0.35);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  letter-spacing: 0.08em;
+  display: none;
+}
+
+/* ── コントロールパネル ── */
+.controls {
+  background: var(--bg);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ctrl-group {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ctrl-group:first-child { padding-top: 0; }
+.ctrl-group:last-of-type { border-bottom: none; }
+
+.ctrl-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.ctrl-label .name {
+  font: 500 10px/1 var(--sans);
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.ctrl-label .name .jp-small { font-size: 9px; color: #8a8880; margin-left: 4px; }
+.ctrl-label .val { font: 500 10px/1 var(--mono); color: var(--accent); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--line-strong);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.12s;
+  box-shadow: 0 0 6px rgba(140,168,200,0.4);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+select.direction-select {
+  width: 100%;
+  font: 500 11px/1 var(--sans);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 1px;
+}
+select.direction-select option { background: var(--bg); color: var(--ink); }
+
+.checkbox-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.checkbox-row input { width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer; }
+.checkbox-row label { font: 500 10px/1 var(--sans); color: var(--ink); cursor: pointer; }
+
+.profile-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+.profile-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.profile-btn:hover { border-color: var(--accent); }
+.profile-btn.active { background: var(--accent); border-color: var(--accent); }
+.profile-btn.active .profile-name { color: #10141c; }
+.profile-btn.active .profile-desc { color: rgba(16,20,28,0.6); }
+.profile-name { font: 600 11px/1 var(--sans); }
+.profile-desc { font: 400 8.5px/1 var(--sans); color: #8a8880; }
+
+.action-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.btn {
+  font: 600 10.5px/1 var(--sans);
+  letter-spacing: 0.04em;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #10141c;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s;
+}
+.btn:hover { opacity: 0.85; }
+.btn.secondary { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.btn.secondary:hover { background: rgba(255,255,255,0.04); border-color: var(--accent); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+@media (max-width: 860px) {
+  .wrap { padding: 20px 16px 50px; }
+  header { flex-direction: column; align-items: flex-start; gap: 10px; padding-bottom: 16px; margin-bottom: 20px; }
+  h1 { font-size: 24px; }
+  h1 .jp { display: block; margin-left: 0; margin-top: 4px; font-size: 13px; }
+  .tagline { font-size: 11px; }
+  .version { text-align: left; }
+
+  .stage { grid-template-columns: 1fr; border: none; }
+  .canvas-area {
+    border: 1px solid var(--line-strong);
+    border-bottom: none;
+    min-height: 220px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg);
+  }
+  #dropZone .label-main { font-size: 13px; text-align: center; padding: 0 16px; }
+  canvas#outputCanvas { max-height: 42vh; }
+
+  .controls { border: 1px solid var(--line-strong); border-top: none; padding: 18px 16px; }
+  .ctrl-group { padding: 18px 0; }
+
+  input[type="range"] { height: 4px; margin: 8px 0; }
+  input[type="range"]::-webkit-slider-thumb { width: 22px; height: 22px; }
+  input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; }
+
+  .ctrl-label .name { font-size: 11.5px; }
+  .ctrl-label .val { font-size: 12px; }
+  select.direction-select { padding: 12px 10px; font-size: 13px; }
+  .checkbox-row { padding: 4px 0; }
+  .checkbox-row input { width: 18px; height: 18px; }
+  .checkbox-row label { font-size: 12px; }
+  .profile-btn { padding: 13px 14px; }
+  .profile-name { font-size: 13px; }
+  .profile-desc { font-size: 9.5px; }
+  .btn { padding: 16px; font-size: 12px; }
+  .action-buttons { gap: 10px; margin-top: 8px; }
+}
+</style>
+</head>
+<body class="theme-lune">
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="filter-tag">VISUAL SYNTH 002</div>
+      <h1>Clair de Lune <span class="jp">月の光</span></h1>
+      <div class="tagline">形を描くのではなく、光・記憶・余韻を描く。</div>
+      <div class="tagline" style="margin-top:2px; opacity:0.7;">Not drawing forms, but light, memory, and lingering resonance.</div>
+    </div>
+    <div class="version">k-eis DESIGN FILTER<br>v1.0</div>
+  </header>
+
+  <div class="theme-switcher">
+    <span class="theme-label">THEME <span class="jp-small">着せ替え</span></span>
+    <div class="theme-options">
+      <button class="theme-btn active" data-theme="lune">
+        <span class="swatch" style="background:#10141c; border:1px solid #8ca8c8;"></span>
+        Lune
+      </button>
+      <button class="theme-btn" data-theme="clair">
+        <span class="swatch" style="background:#f7f4ec; border:1px solid #c9a24a;"></span>
+        Clair
+      </button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="canvas-area">
+      <div id="dropZone">
+        <div class="icon"></div>
+        <div class="label-main">Drop image, or click to select<br><span style="font-size:10px; opacity:0.6;">画像をドロップ、またはクリックして選択</span></div>
+        <div class="label-sub">PNG / JPEG SUPPORTED</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+      <div class="canvas-badge" id="canvasBadge">PREVIEW</div>
+      <canvas id="outputCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">CONTOUR <span class="jp-small">輪郭より階調</span></span>
+          <span class="val" id="contourVal">40%</span>
+        </div>
+        <input type="range" id="contour" min="0" max="100" value="40">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">GLOW <span class="jp-small">光の滲み</span></span>
+          <span class="val" id="glowVal">35%</span>
+        </div>
+        <input type="range" id="glow" min="0" max="100" value="35">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">DISSOLVE <span class="jp-small">消失が美しい</span></span>
+          <span class="val" id="dissolveVal">25%</span>
+        </div>
+        <input type="range" id="dissolve" min="0" max="100" value="25">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="checkbox-row">
+          <input type="checkbox" id="monochrome">
+          <label for="monochrome">MONOCHROME <span style="opacity:0.6;font-weight:400;">/ モノクロ変換</span></label>
+        </div>
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">MOON PROFILE <span class="jp-small">状態を選ぶ</span></span></div>
+        <div class="profile-grid">
+          <div class="profile-btn" data-profile="whisper">
+            <span class="profile-name">Whisper</span>
+            <span class="profile-desc">かすかな階調</span>
+          </div>
+          <div class="profile-btn active" data-profile="clairdelune">
+            <span class="profile-name">Clair de Lune</span>
+            <span class="profile-desc">標準的な月光</span>
+          </div>
+          <div class="profile-btn" data-profile="fog">
+            <span class="profile-name">Fog</span>
+            <span class="profile-desc">深く霧に沈む</span>
+          </div>
+          <div class="profile-btn" data-profile="reverie">
+            <span class="profile-name">Reverie</span>
+            <span class="profile-desc">夢のように溶ける</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-group" style="border-bottom:none;">
+        <div class="action-buttons">
+          <button class="btn" id="downloadBtn" disabled>SAVE AS PNG</button>
+          <button class="btn secondary" id="resetBtn" disabled>RESET IMAGE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="clair-lune.js"></script>
+</body>
+</html>
