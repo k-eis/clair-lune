@@ -14,10 +14,14 @@ const ctx = outputCanvas.getContext('2d');
 const contourSlider = document.getElementById('contour');
 const glowSlider = document.getElementById('glow');
 const dissolveSlider = document.getElementById('dissolve');
+const echoSlider = document.getElementById('echo');
+const wobbleSlider = document.getElementById('wobble');
 const monochromeCheckbox = document.getElementById('monochrome');
 const contourVal = document.getElementById('contourVal');
 const glowVal = document.getElementById('glowVal');
 const dissolveVal = document.getElementById('dissolveVal');
+const echoVal = document.getElementById('echoVal');
+const wobbleVal = document.getElementById('wobbleVal');
 const downloadBtn = document.getElementById('downloadBtn');
 const resetBtn = document.getElementById('resetBtn');
 const presetBtns = document.querySelectorAll('.profile-btn');
@@ -78,6 +82,12 @@ function requestApply() {
 }
 
 // 簡易ボックスブラー（階調表現のベース）
+// 決定論的な擬似ランダム（同じ入力なら常に同じ値）→ Rule06「ランダムではなく機械的リズム」
+function pseudoRandom(seed) {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 function boxBlur(data, w, h, radius) {
   if (radius < 1) return data;
   const out = new Uint8ClampedArray(data.length);
@@ -126,6 +136,8 @@ function applyClairDeLune() {
   const contour = parseInt(contourSlider.value) / 100; // 0=完全階調(ぼかし強) / 1=輪郭くっきり(元画像)
   const glow = parseInt(glowSlider.value) / 100;
   const dissolve = parseInt(dissolveSlider.value) / 100;
+  const echo = parseInt(echoSlider.value) / 100;
+  const wobble = parseInt(wobbleSlider.value) / 100;
   const mono = monochromeCheckbox.checked;
 
   const src = originalImageData.data;
@@ -167,6 +179,7 @@ function applyClairDeLune() {
   }
 
   // Rule04: DISSOLVE → 画像の縁に向かって背景色へ溶けていく（消失が美しい）
+  // Rule05: WOBBLE → 消失の境界に決定論的な微小の揺らぎを加える（秩序と揺らぎの共存）
   if (dissolve > 0.01) {
     // 背景色は画像の平均的な暗さに寄せる（不自然な白抜けを避ける）
     let avgR=0, avgG=0, avgB=0, sampleCount=0;
@@ -181,7 +194,18 @@ function applyClairDeLune() {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const dx = x - cx, dy = y - cy;
-        const dist = Math.sqrt(dx*dx + dy*dy) / maxDist; // 0(中心)-1(角)
+        let dist = Math.sqrt(dx*dx + dy*dy) / maxDist; // 0(中心)-1(角)
+
+        // WOBBLE: 角度に応じた決定論的なノイズで境界を揺らす（完全な円ではなく、有機的な輪郭に）
+        if (wobble > 0.01) {
+          const angle = Math.atan2(dy, dx);
+          const noiseFreq = 6; // 揺らぎの細かさ
+          const noise = pseudoRandom(Math.floor(angle * noiseFreq)) * 0.5
+                      + pseudoRandom(Math.floor(angle * noiseFreq * 2.3) + 500) * 0.3
+                      + pseudoRandom(Math.floor(angle * noiseFreq * 4.7) + 900) * 0.2;
+          dist += (noise - 0.5) * wobble * 0.35;
+        }
+
         // dissolveが強いほど、中心から早く溶け始める
         const fadeStart = 1 - dissolve * 0.85;
         if (dist > fadeStart) {
@@ -190,6 +214,47 @@ function applyClairDeLune() {
           out[i]   = out[i]   * (1-fadeAmount) + avgR * fadeAmount;
           out[i+1] = out[i+1] * (1-fadeAmount) + avgG * fadeAmount;
           out[i+2] = out[i+2] * (1-fadeAmount) + avgB * fadeAmount;
+        }
+      }
+    }
+  }
+
+  // Rule01: ECHO → 「反復ではなく変奏」。ディレイ/エコーのように、少しずつずれ・縮小・減衰した
+  // 自分自身の残像を重ねる。音楽のディレイエフェクトの視覚翻訳。
+  if (echo > 0.01) {
+    const echoLayers = 4;
+    const base = new Uint8ClampedArray(out); // 現時点のベース画像を保持
+    for (let layer = 1; layer <= echoLayers; layer++) {
+      const layerT = layer / echoLayers;
+      // 減衰：ディレイのフィードバックのように、後のレイヤーほど薄くなる
+      const opacity = echo * Math.pow(0.55, layer - 1) * 0.6;
+      if (opacity < 0.01) continue;
+
+      // ずらし幅：echoが強いほど、各レイヤーが少しずつ大きくずれる（変奏＝毎回わずかに違う）
+      const shiftAmount = echo * 26 * layerT;
+      const shiftAngle = layer * 2.4 + pseudoRandom(layer * 17) * Math.PI * 0.6;
+      const shiftX = Math.round(Math.cos(shiftAngle) * shiftAmount);
+      const shiftY = Math.round(Math.sin(shiftAngle) * shiftAmount);
+
+      // わずかな拡大（毎回のフレーズが少し形を変える感覚）
+      const scale = 1 + layerT * echo * 0.06;
+      const scaledW = Math.round(w * scale);
+      const scaledH = Math.round(h * scale);
+      const offX = Math.round((scaledW - w) / 2) + shiftX;
+      const offY = Math.round((scaledH - h) / 2) + shiftY;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          // 元画像上での対応座標（縮小写像）
+          const srcX = Math.round((x + offX) / scale);
+          const srcY = Math.round((y + offY) / scale);
+          if (srcX < 0 || srcX >= w || srcY < 0 || srcY >= h) continue;
+
+          const srcI = (srcY * w + srcX) * 4;
+          const dstI = (y * w + x) * 4;
+          out[dstI]   = out[dstI]   * (1-opacity) + base[srcI]   * opacity;
+          out[dstI+1] = out[dstI+1] * (1-opacity) + base[srcI+1] * opacity;
+          out[dstI+2] = out[dstI+2] * (1-opacity) + base[srcI+2] * opacity;
         }
       }
     }
@@ -222,14 +287,24 @@ dissolveSlider.addEventListener('input', () => {
   clearPresetActive();
   requestApply();
 });
+echoSlider.addEventListener('input', () => {
+  echoVal.textContent = echoSlider.value + '%';
+  clearPresetActive();
+  requestApply();
+});
+wobbleSlider.addEventListener('input', () => {
+  wobbleVal.textContent = wobbleSlider.value + '%';
+  clearPresetActive();
+  requestApply();
+});
 monochromeCheckbox.addEventListener('change', applyClairDeLune);
 
 // ── Moon Profile
 const MOON_PROFILES = {
-  whisper:      { contour: 65, glow: 15, dissolve: 10 }, // かすかな階調
-  clairdelune:  { contour: 40, glow: 35, dissolve: 25 }, // 標準的な月光
-  fog:          { contour: 15, glow: 45, dissolve: 45 }, // 深く霧に沈む
-  reverie:      { contour: 5,  glow: 60, dissolve: 60 }, // 夢のように溶ける
+  whisper:      { contour: 65, glow: 15, dissolve: 10, echo: 5,  wobble: 8  }, // かすかな階調
+  clairdelune:  { contour: 40, glow: 35, dissolve: 25, echo: 20, wobble: 18 }, // 標準的な月光
+  fog:          { contour: 15, glow: 45, dissolve: 45, echo: 35, wobble: 30 }, // 深く霧に沈む
+  reverie:      { contour: 5,  glow: 60, dissolve: 60, echo: 55, wobble: 40 }, // 夢のように溶ける
 };
 
 presetBtns.forEach(btn => {
@@ -242,6 +317,10 @@ presetBtns.forEach(btn => {
     glowVal.textContent = profile.glow + '%';
     dissolveSlider.value = profile.dissolve;
     dissolveVal.textContent = profile.dissolve + '%';
+    echoSlider.value = profile.echo;
+    echoVal.textContent = profile.echo + '%';
+    wobbleSlider.value = profile.wobble;
+    wobbleVal.textContent = profile.wobble + '%';
     presetBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     requestApply();

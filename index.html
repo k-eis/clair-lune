@@ -407,6 +407,22 @@ select.direction-select option { background: var(--bg); color: var(--ink); }
       </div>
 
       <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">ECHO <span class="jp-small">反復ではなく変奏</span></span>
+          <span class="val" id="echoVal">0%</span>
+        </div>
+        <input type="range" id="echo" min="0" max="100" value="0">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">WOBBLE <span class="jp-small">秩序と揺らぎ</span></span>
+          <span class="val" id="wobbleVal">0%</span>
+        </div>
+        <input type="range" id="wobble" min="0" max="100" value="0">
+      </div>
+
+      <div class="ctrl-group">
         <div class="checkbox-row">
           <input type="checkbox" id="monochrome">
           <label for="monochrome">MONOCHROME <span style="opacity:0.6;font-weight:400;">/ モノクロ変換</span></label>
