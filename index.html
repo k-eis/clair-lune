@@ -243,6 +243,45 @@ canvas#outputCanvas { max-width: 100%; max-height: 640px; display: none; }
 .ctrl-label .name .jp-small { font-size: 9px; color: #8a8880; margin-left: 4px; }
 .ctrl-label .val { font: 500 10px/1 var(--mono); color: var(--accent); }
 
+/* ── ECHO Advanced（折りたたみ詳細設定） ── */
+.echo-advanced { margin-top: 10px; }
+.echo-advanced summary {
+  font: 500 9px/1 var(--mono);
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+  opacity: 0.75;
+  transition: opacity 0.12s;
+}
+.echo-advanced summary:hover { opacity: 1; }
+.echo-advanced summary::-webkit-details-marker { display: none; }
+.echo-advanced summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.echo-advanced[open] summary::before { transform: rotate(90deg); }
+.echo-advanced-inner {
+  padding: 12px 12px 4px;
+  margin-top: 8px;
+  border-left: 1px solid var(--line-strong);
+}
+.ctrl-sublabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.ctrl-sublabel:not(:first-child) { margin-top: 16px; }
+.ctrl-sublabel .name { font: 500 9px/1 var(--sans); color: var(--ink); opacity: 0.85; }
+.ctrl-sublabel .name .jp-small { font-size: 8px; color: #8a8880; margin-left: 4px; }
+.ctrl-sublabel .val { font: 500 9px/1 var(--mono); color: var(--accent); }
+.echo-advanced-inner input[type="range"] { height: 2px; }
+.echo-advanced-inner input[type="range"]::-webkit-slider-thumb { width: 10px; height: 10px; }
+
+
 input[type="range"] {
   -webkit-appearance: none;
   width: 100%;
@@ -451,6 +490,11 @@ body.theme-juno .version { color: var(--ink); opacity: 0.6; }
   input[type="range"] { height: 4px; margin: 8px 0; }
   input[type="range"]::-webkit-slider-thumb { width: 22px; height: 22px; }
   input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; }
+  .echo-advanced-inner input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; }
+  .echo-advanced-inner input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; }
+  .echo-advanced summary { padding: 8px 0; font-size: 10px; }
+  .ctrl-sublabel .name { font-size: 10.5px; }
+  .ctrl-sublabel .val { font-size: 10.5px; }
 
   .ctrl-label .name { font-size: 11.5px; }
   .ctrl-label .val { font-size: 12px; }
@@ -544,6 +588,29 @@ body.theme-juno .version { color: var(--ink); opacity: 0.6; }
           <span class="val" id="echoVal">0%</span>
         </div>
         <input type="range" id="echo" min="0" max="100" value="0">
+
+        <details class="echo-advanced">
+          <summary>Advanced <span class="jp-small">詳細設定</span></summary>
+          <div class="echo-advanced-inner">
+            <div class="ctrl-sublabel">
+              <span class="name">ANGLE <span class="jp-small">ずらす方向</span></span>
+              <span class="val" id="echoAngleVal">130°</span>
+            </div>
+            <input type="range" id="echoAngle" min="0" max="360" value="130">
+
+            <div class="ctrl-sublabel">
+              <span class="name">SCALE <span class="jp-small">拡大率</span></span>
+              <span class="val" id="echoScaleVal">6%</span>
+            </div>
+            <input type="range" id="echoScale" min="0" max="20" value="6">
+
+            <div class="ctrl-sublabel">
+              <span class="name">DECAY <span class="jp-small">減衰率</span></span>
+              <span class="val" id="echoDecayVal">55%</span>
+            </div>
+            <input type="range" id="echoDecay" min="20" max="85" value="55">
+          </div>
+        </details>
       </div>
 
       <div class="ctrl-group">

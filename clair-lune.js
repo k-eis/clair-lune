@@ -15,12 +15,18 @@ const contourSlider = document.getElementById('contour');
 const glowSlider = document.getElementById('glow');
 const dissolveSlider = document.getElementById('dissolve');
 const echoSlider = document.getElementById('echo');
+const echoAngleSlider = document.getElementById('echoAngle');
+const echoScaleSlider = document.getElementById('echoScale');
+const echoDecaySlider = document.getElementById('echoDecay');
 const wobbleSlider = document.getElementById('wobble');
 const monochromeCheckbox = document.getElementById('monochrome');
 const contourVal = document.getElementById('contourVal');
 const glowVal = document.getElementById('glowVal');
 const dissolveVal = document.getElementById('dissolveVal');
 const echoVal = document.getElementById('echoVal');
+const echoAngleVal = document.getElementById('echoAngleVal');
+const echoScaleVal = document.getElementById('echoScaleVal');
+const echoDecayVal = document.getElementById('echoDecayVal');
 const wobbleVal = document.getElementById('wobbleVal');
 const downloadBtn = document.getElementById('downloadBtn');
 const resetBtn = document.getElementById('resetBtn');
@@ -157,6 +163,9 @@ function applyClairDeLune(preview) {
   const glow = parseInt(glowSlider.value) / 100;
   const dissolve = parseInt(dissolveSlider.value) / 100;
   const echo = parseInt(echoSlider.value) / 100;
+  const echoAngleDeg = parseInt(echoAngleSlider.value); // 0-360度
+  const echoScalePct = parseInt(echoScaleSlider.value) / 100; // 0-0.20
+  const echoDecayPct = parseInt(echoDecaySlider.value) / 100; // 0.20-0.85
   const wobble = parseInt(wobbleSlider.value) / 100;
   const mono = monochromeCheckbox.checked;
 
@@ -245,25 +254,28 @@ function applyClairDeLune(preview) {
   // 自分自身の残像を重ねる。音楽のディレイエフェクトの視覚翻訳。
   if (echo > 0.01) {
     const echoLayers = 4;
+    const baseAngleRad = echoAngleDeg * Math.PI / 180;
     const base = new Uint8ClampedArray(out); // 現時点のベース画像を保持
     for (let layer = 1; layer <= echoLayers; layer++) {
       const layerT = layer / echoLayers;
-      // 減衰：ディレイのフィードバックのように、後のレイヤーほど薄くなる
-      const opacity = echo * Math.pow(0.55, layer - 1) * 0.6;
+      // 減衰：ディレイのフィードバックのように、後のレイヤーほど薄くなる（DECAY: 小さいほど急激）
+      const opacity = echo * Math.pow(echoDecayPct, layer - 1) * 0.6;
       if (opacity < 0.01) continue;
 
       // ずらし幅：echoが強いほど、各レイヤーが少しずつ大きくずれる（変奏＝毎回わずかに違う）
+      // ANGLE: ユーザーが指定した方向を基準に、レイヤーごとわずかに揺らぎを加える
       const shiftAmount = echo * 26 * layerT;
-      const shiftAngle = layer * 2.4 + pseudoRandom(layer * 17) * Math.PI * 0.6;
+      const shiftAngle = baseAngleRad + layer * 0.18 + pseudoRandom(layer * 17) * 0.25;
       const shiftX = Math.round(Math.cos(shiftAngle) * shiftAmount);
       const shiftY = Math.round(Math.sin(shiftAngle) * shiftAmount);
 
-      // わずかな拡大（毎回のフレーズが少し形を変える感覚）
-      const scale = 1 + layerT * echo * 0.06;
+      // わずかな拡大（毎回のフレーズが少し形を変える感覚）：SCALEで調整
+      const scale = 1 + layerT * echoScalePct;
       const scaledW = Math.round(w * scale);
       const scaledH = Math.round(h * scale);
       const offX = Math.round((scaledW - w) / 2) + shiftX;
       const offY = Math.round((scaledH - h) / 2) + shiftY;
+
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -308,7 +320,7 @@ function applyClairDeLune(preview) {
 }
 
 // ── UIイベント
-const allSliders = [contourSlider, glowSlider, dissolveSlider, echoSlider, wobbleSlider];
+const allSliders = [contourSlider, glowSlider, dissolveSlider, echoSlider, wobbleSlider, echoAngleSlider, echoScaleSlider, echoDecaySlider];
 
 // ドラッグ開始：軽量プレビューモードへ
 allSliders.forEach(slider => {
@@ -352,6 +364,21 @@ echoSlider.addEventListener('input', () => {
 });
 wobbleSlider.addEventListener('input', () => {
   wobbleVal.textContent = wobbleSlider.value + '%';
+  clearPresetActive();
+  requestApply();
+});
+echoAngleSlider.addEventListener('input', () => {
+  echoAngleVal.textContent = echoAngleSlider.value + '°';
+  clearPresetActive();
+  requestApply();
+});
+echoScaleSlider.addEventListener('input', () => {
+  echoScaleVal.textContent = echoScaleSlider.value + '%';
+  clearPresetActive();
+  requestApply();
+});
+echoDecaySlider.addEventListener('input', () => {
+  echoDecayVal.textContent = echoDecaySlider.value + '%';
   clearPresetActive();
   requestApply();
 });
