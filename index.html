@@ -33,6 +33,24 @@ body.theme-clair {
   --canvas-check-b: #f7f4ec;
 }
 
+/* ── THEME: JUNO（Roland JUNO-106の実機配色） ── */
+body.theme-juno {
+  --bg: #7d8084;
+  --ink: #f0eee8;
+  --line: #8e9194;
+  --line-strong: #a5a8ab;
+  --accent: #d4272c;
+  --accent2: #f5d949;
+  --accent3: #6ec3e0;
+  --accent4: #4a7a4f;
+  --canvas-check-a: #6e7175;
+  --canvas-check-b: #7d8084;
+  --mono: 'Courier New', monospace;
+  --sans: 'Courier New', monospace;
+  --led-red: #ff2a2a;
+  --panel-white: #e8e6de;
+}
+
 html, body {
   background: var(--bg);
   color: var(--ink);
@@ -120,6 +138,8 @@ body.theme-lune .tagline { color: #8892a8; }
 .theme-btn:hover { border-color: var(--accent); }
 .theme-btn.active { background: var(--accent); border-color: var(--accent); color: #10141c; }
 .theme-btn .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.theme-btn .swatch-multi { display: inline-flex; width: 14px; height: 14px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+.theme-btn .swatch-multi span { width: 34%; height: 100%; }
 
 /* ── メインレイアウト ── */
 .stage {
@@ -300,6 +320,110 @@ select.direction-select option { background: var(--bg); color: var(--ink); }
 .btn.secondary:hover { background: rgba(255,255,255,0.04); border-color: var(--accent); }
 .btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
+/* ── JUNO テーマ固有：Roland JUNO-106の実機配色 ── */
+body.theme-juno .filter-tag {
+  color: white;
+  background: var(--accent);
+  display: inline-block;
+  padding: 3px 8px;
+  letter-spacing: 0.12em;
+}
+body.theme-juno h1 { color: var(--ink); }
+body.theme-juno .tagline { color: var(--ink); opacity: 0.75; }
+
+/* 各コントロールグループの見出しに、実機のように複数色を分散（5グループ分） */
+body.theme-juno .ctrl-label .name {
+  background: var(--accent);
+  color: white;
+  padding: 3px 8px;
+  display: inline-block;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+body.theme-juno .ctrl-label .name .jp-small { color: rgba(255,255,255,0.75); }
+
+body.theme-juno .ctrl-group:nth-of-type(5n+1) .ctrl-label .name { background: var(--accent); color: white; }
+body.theme-juno .ctrl-group:nth-of-type(5n+1) .ctrl-label .name .jp-small { color: rgba(255,255,255,0.75); }
+
+body.theme-juno .ctrl-group:nth-of-type(5n+2) .ctrl-label .name { background: var(--accent2); color: #2a2408; }
+body.theme-juno .ctrl-group:nth-of-type(5n+2) .ctrl-label .name .jp-small { color: rgba(42,36,8,0.65); }
+
+body.theme-juno .ctrl-group:nth-of-type(5n+3) .ctrl-label .name { background: var(--accent3); color: #0d2a33; }
+body.theme-juno .ctrl-group:nth-of-type(5n+3) .ctrl-label .name .jp-small { color: rgba(13,42,51,0.65); }
+
+body.theme-juno .ctrl-group:nth-of-type(5n+4) .ctrl-label .name { background: var(--accent4); color: white; }
+body.theme-juno .ctrl-group:nth-of-type(5n+4) .ctrl-label .name .jp-small { color: rgba(255,255,255,0.75); }
+
+body.theme-juno .ctrl-group:nth-of-type(5n+5) .ctrl-label .name { background: var(--accent); color: white; }
+body.theme-juno .ctrl-group:nth-of-type(5n+5) .ctrl-label .name .jp-small { color: rgba(255,255,255,0.75); }
+
+/* LED風の赤い数値表示 */
+body.theme-juno .val {
+  color: var(--led-red);
+  text-shadow: 0 0 6px rgba(255,42,42,0.55);
+  font-weight: 700;
+}
+
+/* スライダー：グレーの目盛りエリア＋黒い溝、つまみは中央に途切れた縦白ライン */
+body.theme-juno input[type="range"] {
+  background-color: #0a0a0a;
+  background-image:
+    repeating-linear-gradient(to right, var(--panel-white) 0px, var(--panel-white) 1px, #6e6e6c 1px, #6e6e6c 10px),
+    repeating-linear-gradient(to right, var(--panel-white) 0px, var(--panel-white) 1px, #6e6e6c 1px, #6e6e6c 10px);
+  background-size: 100% 9px, 100% 9px;
+  background-position: top left, bottom left;
+  background-repeat: no-repeat, no-repeat;
+  height: 26px;
+  border-radius: 1px;
+  border: none;
+}
+body.theme-juno input[type="range"]::-webkit-slider-thumb {
+  background:
+    linear-gradient(to right, transparent 0%, transparent 43%, #f0eee8 43%, #f0eee8 57%, transparent 57%, transparent 100%) top / 100% 34% no-repeat,
+    linear-gradient(to right, transparent 0%, transparent 43%, #f0eee8 43%, #f0eee8 57%, transparent 57%, transparent 100%) bottom / 100% 34% no-repeat,
+    #1c1c1c;
+  width: 16px;
+  height: 26px;
+  border-radius: 1px;
+  border: 1px solid #000;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+body.theme-juno input[type="range"]::-moz-range-thumb {
+  background:
+    linear-gradient(to right, transparent 0%, transparent 43%, #f0eee8 43%, #f0eee8 57%, transparent 57%, transparent 100%) top / 100% 34% no-repeat,
+    linear-gradient(to right, transparent 0%, transparent 43%, #f0eee8 43%, #f0eee8 57%, transparent 57%, transparent 100%) bottom / 100% 34% no-repeat,
+    #1c1c1c;
+  width: 16px;
+  height: 26px;
+  border-radius: 1px;
+  border: 1px solid #000;
+}
+
+/* Moon Profile：黄色いボタン（実機のKEY TRANSPOSE風） */
+body.theme-juno .profile-btn { background: var(--panel-white); border-color: var(--line-strong); }
+body.theme-juno .profile-btn .profile-name { color: #1c1c1c; }
+body.theme-juno .profile-btn .profile-desc { color: #5a5a55; }
+body.theme-juno .profile-btn.active { background: var(--accent2); border-color: var(--accent2); }
+body.theme-juno .profile-btn.active .profile-name { color: #1c1c1c; }
+body.theme-juno .profile-btn.active .profile-desc { color: #4a4020; }
+
+/* テーマ切り替えボタン：水色のバンクボタン風 */
+body.theme-juno .theme-btn { background: var(--panel-white); border-color: var(--line-strong); color: #1c1c1c; }
+body.theme-juno .theme-btn.active { background: var(--accent3); border-color: var(--accent3); color: #10333f; }
+
+/* DIRECTIONセレクト・チェックボックス */
+body.theme-juno select.direction-select { background: var(--panel-white); color: #1c1c1c; border-color: var(--line-strong); }
+body.theme-juno .checkbox-row label { color: var(--ink); }
+body.theme-juno .checkbox-row input { accent-color: var(--accent2); }
+
+/* アクションボタン：赤 */
+body.theme-juno .btn { background: var(--accent); border-color: var(--accent); color: white; }
+body.theme-juno .btn:hover { background: #b81f24; border-color: #b81f24; }
+body.theme-juno .btn.secondary { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+
+body.theme-juno .canvas-badge { background: var(--accent2); color: #1c1c1c; border-color: var(--accent2); font-weight: 700; }
+body.theme-juno .version { color: var(--ink); opacity: 0.6; }
+
 @media (max-width: 860px) {
   .wrap { padding: 20px 16px 50px; }
   header { flex-direction: column; align-items: flex-start; gap: 10px; padding-bottom: 16px; margin-bottom: 20px; }
@@ -365,6 +489,14 @@ select.direction-select option { background: var(--bg); color: var(--ink); }
       <button class="theme-btn" data-theme="clair">
         <span class="swatch" style="background:#f7f4ec; border:1px solid #c9a24a;"></span>
         Clair
+      </button>
+      <button class="theme-btn" data-theme="juno">
+        <span class="swatch-multi">
+          <span style="background:#d4272c;"></span>
+          <span style="background:#f5d949;"></span>
+          <span style="background:#6ec3e0;"></span>
+        </span>
+        JUNO
       </button>
     </div>
   </div>

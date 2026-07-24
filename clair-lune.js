@@ -64,6 +64,9 @@ function loadFile(file) {
   reader.readAsDataURL(file);
 }
 
+let previewImageData = null; // ドラッグ中の軽量プレビュー用（縮小版）
+let isDragging = false;
+
 function setupCanvas(img) {
   const MAX_W = 1200; // 階調処理は重めなので少し抑える
   let w = img.width, h = img.height;
@@ -72,13 +75,28 @@ function setupCanvas(img) {
   outputCanvas.height = h;
   ctx.drawImage(img, 0, 0, w, h);
   originalImageData = ctx.getImageData(0, 0, w, h);
+
+  // プレビュー用に縮小したImageDataも作っておく（ドラッグ中の高速処理用）
+  const PREVIEW_MAX_W = 320;
+  const pScale = Math.min(1, PREVIEW_MAX_W / w);
+  const pw = Math.max(1, Math.round(w * pScale));
+  const ph = Math.max(1, Math.round(h * pScale));
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = pw; pCanvas.height = ph;
+  const pCtx = pCanvas.getContext('2d');
+  pCtx.drawImage(img, 0, 0, pw, ph);
+  previewImageData = pCtx.getImageData(0, 0, pw, ph);
 }
 
 // スロットリング（重い処理の連続実行を防ぐ）
 let driftRAF = null;
 function requestApply() {
   if (driftRAF) cancelAnimationFrame(driftRAF);
-  driftRAF = requestAnimationFrame(() => { applyClairDeLune(); driftRAF = null; });
+  driftRAF = requestAnimationFrame(() => {
+    // ドラッグ中は軽量プレビュー、指を離したらフル解像度で処理
+    applyClairDeLune(isDragging);
+    driftRAF = null;
+  });
 }
 
 // 簡易ボックスブラー（階調表現のベース）
@@ -127,11 +145,13 @@ function boxBlur(data, w, h, radius) {
   return out;
 }
 
-function applyClairDeLune() {
+function applyClairDeLune(preview) {
   if (!originalImageData) return;
 
-  const w = outputCanvas.width;
-  const h = outputCanvas.height;
+  // プレビューモード：縮小データを使って高速に計算し、結果を実寸キャンバスへ拡大描画する
+  const useData = (preview && previewImageData) ? previewImageData : originalImageData;
+  const w = useData.width;
+  const h = useData.height;
 
   const contour = parseInt(contourSlider.value) / 100; // 0=完全階調(ぼかし強) / 1=輪郭くっきり(元画像)
   const glow = parseInt(glowSlider.value) / 100;
@@ -140,10 +160,12 @@ function applyClairDeLune() {
   const wobble = parseInt(wobbleSlider.value) / 100;
   const mono = monochromeCheckbox.checked;
 
-  const src = originalImageData.data;
+  const src = useData.data;
 
   // Rule02: CONTOURが低いほど強くぼかす（輪郭より階調）
-  const blurRadius = (1 - contour) * 14; // 0-14pxのボックスブラー
+  // プレビュー中は画像自体が小さいので、blurRadiusも比率に合わせて縮小
+  const radiusScale = preview ? (w / outputCanvas.width) : 1;
+  const blurRadius = (1 - contour) * 14 * Math.max(radiusScale, 0.35);
   const blurred = boxBlur(src, w, h, blurRadius);
 
   // ベースは「元画像とぼかし画像のブレンド」
@@ -268,10 +290,46 @@ function applyClairDeLune() {
   }
 
   const resultData = new ImageData(out, w, h);
-  ctx.putImageData(resultData, 0, 0);
+
+  if (preview && previewImageData) {
+    // 小さい画像を一旦オフスクリーンcanvasに描き、実寸まで拡大してからメインキャンバスへ
+    let tempCanvas = applyClairDeLune._tempCanvas;
+    if (!tempCanvas) {
+      tempCanvas = document.createElement('canvas');
+      applyClairDeLune._tempCanvas = tempCanvas;
+    }
+    tempCanvas.width = w; tempCanvas.height = h;
+    tempCanvas.getContext('2d').putImageData(resultData, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, outputCanvas.width, outputCanvas.height);
+  } else {
+    ctx.putImageData(resultData, 0, 0);
+  }
 }
 
 // ── UIイベント
+const allSliders = [contourSlider, glowSlider, dissolveSlider, echoSlider, wobbleSlider];
+
+// ドラッグ開始：軽量プレビューモードへ
+allSliders.forEach(slider => {
+  slider.addEventListener('pointerdown', () => { isDragging = true; });
+  slider.addEventListener('touchstart', () => { isDragging = true; }, { passive: true });
+});
+// ドラッグ終了：フル解像度で最終描画
+function endDrag() {
+  if (!isDragging) return;
+  isDragging = false;
+  requestApply();
+}
+allSliders.forEach(slider => {
+  slider.addEventListener('pointerup', endDrag);
+  slider.addEventListener('touchend', endDrag);
+  slider.addEventListener('change', endDrag);
+});
+// 念のため、指がスライダー外で離れた場合もフル解像度に戻す
+window.addEventListener('pointerup', () => { if (isDragging) endDrag(); });
+window.addEventListener('touchend', () => { if (isDragging) endDrag(); });
+
 contourSlider.addEventListener('input', () => {
   contourVal.textContent = contourSlider.value + '%';
   clearPresetActive();
@@ -330,7 +388,7 @@ presetBtns.forEach(btn => {
 function clearPresetActive() { presetBtns.forEach(b => b.classList.remove('active')); }
 
 // ── テーマ切り替え（Lune / Clair）
-const THEME_CLASS_MAP = { lune: null, clair: 'theme-clair' };
+const THEME_CLASS_MAP = { lune: null, clair: 'theme-clair', juno: 'theme-juno' };
 
 function applyTheme(themeKey) {
   if (!(themeKey in THEME_CLASS_MAP)) return;
