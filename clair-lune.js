@@ -112,6 +112,40 @@ function pseudoRandom(seed) {
   return x - Math.floor(x);
 }
 
+// 2次元版：座標(x,y)から決定論的な値を返す（角度に依存しないので放射状パターンが出ない）
+function pseudoRandom2D(x, y) {
+  const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+// 格子点を線形補間した滑らかなノイズ（簡易パーリンノイズ的な質感）
+// scaleが大きいほど模様が粗く・大きな塊になる
+function smoothNoise2D(x, y, scale) {
+  const sx = x / scale, sy = y / scale;
+  const x0 = Math.floor(sx), y0 = Math.floor(sy);
+  const fx = sx - x0, fy = sy - y0;
+
+  const v00 = pseudoRandom2D(x0, y0);
+  const v10 = pseudoRandom2D(x0+1, y0);
+  const v01 = pseudoRandom2D(x0, y0+1);
+  const v11 = pseudoRandom2D(x0+1, y0+1);
+
+  // スムーズステップで補間（カクカクしない滑らかな遷移）
+  const sfx = fx*fx*(3-2*fx);
+  const sfy = fy*fy*(3-2*fy);
+
+  const top = v00 + (v10 - v00) * sfx;
+  const bottom = v01 + (v11 - v01) * sfx;
+  return top + (bottom - top) * sfy;
+}
+
+// 複数の周波数を重ねた雲状ノイズ（0-1の範囲、自然な有機的ムラになる）
+function cloudNoise(x, y) {
+  return smoothNoise2D(x, y, 180) * 0.5
+       + smoothNoise2D(x + 1000, y + 1000, 80) * 0.3
+       + smoothNoise2D(x + 2000, y + 2000, 35) * 0.2;
+}
+
 function boxBlur(data, w, h, radius) {
   if (radius < 1) return data;
   const out = new Uint8ClampedArray(data.length);
@@ -209,8 +243,9 @@ function applyClairDeLune(preview) {
     }
   }
 
-  // Rule04: DISSOLVE → 画像の縁に向かって背景色へ溶けていく（消失が美しい）
-  // Rule05: WOBBLE → 消失の境界に決定論的な微小の揺らぎを加える（秩序と揺らぎの共存）
+  // Rule04: DISSOLVE → 予測できない場所から、少しずつ像を失っていく（消失が美しい）
+  // 円形の同心円ではなく、雲状ノイズの濃淡そのものを消失のマスクとして使う。
+  // 「ここから消える」という形を持たせず、霧が思いがけない場所に忍び寄るような偶然性を大事にする。
   if (dissolve > 0.01) {
     // 背景色は画像の平均的な暗さに寄せる（不自然な白抜けを避ける）
     let avgR=0, avgG=0, avgB=0, sampleCount=0;
@@ -222,25 +257,31 @@ function applyClairDeLune(preview) {
     const cx = w/2, cy = h/2;
     const maxDist = Math.sqrt(cx*cx + cy*cy);
 
+    // WOBBLEが低い時のための保険：ノイズがゼロでも周辺からうっすら消えるよう、
+    // ごく弱い放射バイアスだけ残す（強さは従来の1/4程度に抑え、形として感じさせない）
+    const edgeBias = 0.25;
+
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const dx = x - cx, dy = y - cy;
-        let dist = Math.sqrt(dx*dx + dy*dy) / maxDist; // 0(中心)-1(角)
+        // 雲状ノイズ（複数オクターブ）が消失の主役。中心からの距離ではなく、この濃淡そのものが「溶けやすさ」になる
+        const noise = cloudNoise(x, y); // 0-1
 
-        // WOBBLE: 角度に応じた決定論的なノイズで境界を揺らす（完全な円ではなく、有機的な輪郭に）
+        const dx = x - cx, dy = y - cy;
+        const edgeDist = Math.sqrt(dx*dx + dy*dy) / maxDist; // 0(中心)-1(角)：ごく弱いバイアスのみに使用
+
+        // ノイズを主軸に、わずかな周辺バイアスを混ぜる（画像端が完全にランダムだと不安定に見えるため）
+        let dissolveField = noise * (1 - edgeBias) + edgeDist * edgeBias;
+
+        // WOBBLEが高いほど、ノイズの効きをさらに強調してムラを大きくする
         if (wobble > 0.01) {
-          const angle = Math.atan2(dy, dx);
-          const noiseFreq = 6; // 揺らぎの細かさ
-          const noise = pseudoRandom(Math.floor(angle * noiseFreq)) * 0.5
-                      + pseudoRandom(Math.floor(angle * noiseFreq * 2.3) + 500) * 0.3
-                      + pseudoRandom(Math.floor(angle * noiseFreq * 4.7) + 900) * 0.2;
-          dist += (noise - 0.5) * wobble * 0.35;
+          const wobbleNoise = cloudNoise(x + 3000, y + 3000);
+          dissolveField += (wobbleNoise - 0.5) * wobble * 0.4;
         }
 
-        // dissolveが強いほど、中心から早く溶け始める
-        const fadeStart = 1 - dissolve * 0.85;
-        if (dist > fadeStart) {
-          const fadeAmount = Math.min(1, (dist - fadeStart) / (1 - fadeStart + 0.001));
+        // dissolveが強いほど、消える閾値が下がる（＝広い範囲が消えやすくなる）
+        const threshold = 1 - dissolve * 0.95;
+        if (dissolveField > threshold) {
+          const fadeAmount = Math.min(1, (dissolveField - threshold) / (1 - threshold + 0.001));
           const i = (y*w+x)*4;
           out[i]   = out[i]   * (1-fadeAmount) + avgR * fadeAmount;
           out[i+1] = out[i+1] * (1-fadeAmount) + avgG * fadeAmount;
