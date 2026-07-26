@@ -314,9 +314,14 @@ function applyClairDeLune(preview) {
       const scale = 1 + layerT * echoScalePct;
       const scaledW = Math.round(w * scale);
       const scaledH = Math.round(h * scale);
-      const offX = Math.round((scaledW - w) / 2) + shiftX;
-      const offY = Math.round((scaledH - h) / 2) + shiftY;
 
+      // 拡大の中心点を画像の幾何学的中心から意図的にずらす（完璧な対称ズームを避ける）
+      // レイヤーごとに少しずつ違う位置になるので、単一の放射状パターンにならない
+      const centerJitterX = (pseudoRandom(layer * 31 + 7) - 0.5) * w * 0.12;
+      const centerJitterY = (pseudoRandom(layer * 47 + 13) - 0.5) * h * 0.12;
+
+      const offX = Math.round((scaledW - w) / 2 + centerJitterX) + shiftX;
+      const offY = Math.round((scaledH - h) / 2 + centerJitterY) + shiftY;
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
