@@ -243,16 +243,22 @@ function applyClairDeLune(preview) {
     }
   }
 
-  // Rule04: DISSOLVE → 予測できない場所から、少しずつ像を失っていく（消失が美しい）
+  // Rule04: DISSOLVE → 予測できない場所から、白い光の霧に包まれて消えていく（消失が美しい）
   // 円形の同心円ではなく、雲状ノイズの濃淡そのものを消失のマスクとして使う。
   // 「ここから消える」という形を持たせず、霧が思いがけない場所に忍び寄るような偶然性を大事にする。
   if (dissolve > 0.01) {
-    // 背景色は画像の平均的な暗さに寄せる（不自然な白抜けを避ける）
+    // 消える先は「画像の暗さ」ではなく、月光のような白い霧へ。
+    // ほんの少しだけ画像の色相を残しつつ、大部分は明るい霧色にする（完全な白飛びは避ける）
     let avgR=0, avgG=0, avgB=0, sampleCount=0;
     for (let i = 0; i < out.length; i += 400) {
       avgR += out[i]; avgG += out[i+1]; avgB += out[i+2]; sampleCount++;
     }
     avgR /= sampleCount; avgG /= sampleCount; avgB /= sampleCount;
+
+    // 霧色：白に近いが、画像の色味をわずかに引き継いで人工的な白飛びを防ぐ
+    const mistR = avgR * 0.15 + 245 * 0.85;
+    const mistG = avgG * 0.15 + 248 * 0.85;
+    const mistB = avgB * 0.15 + 250 * 0.85;
 
     const cx = w/2, cy = h/2;
     const maxDist = Math.sqrt(cx*cx + cy*cy);
@@ -282,10 +288,12 @@ function applyClairDeLune(preview) {
         const threshold = 1 - dissolve * 0.95;
         if (dissolveField > threshold) {
           const fadeAmount = Math.min(1, (dissolveField - threshold) / (1 - threshold + 0.001));
+          // イーズをかけて、消え際が急に切り替わらず柔らかく霧に溶けるようにする
+          const softFade = fadeAmount * fadeAmount * (3 - 2 * fadeAmount); // スムーズステップ
           const i = (y*w+x)*4;
-          out[i]   = out[i]   * (1-fadeAmount) + avgR * fadeAmount;
-          out[i+1] = out[i+1] * (1-fadeAmount) + avgG * fadeAmount;
-          out[i+2] = out[i+2] * (1-fadeAmount) + avgB * fadeAmount;
+          out[i]   = out[i]   * (1-softFade) + mistR * softFade;
+          out[i+1] = out[i+1] * (1-softFade) + mistG * softFade;
+          out[i+2] = out[i+2] * (1-softFade) + mistB * softFade;
         }
       }
     }
