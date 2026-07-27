@@ -243,12 +243,10 @@ function applyClairDeLune(preview) {
     }
   }
 
-  // Rule04: DISSOLVE → 予測できない場所から、白い光の霧に包まれて消えていく（消失が美しい）
-  // 円形の同心円ではなく、雲状ノイズの濃淡そのものを消失のマスクとして使う。
-  // 「ここから消える」という形を持たせず、霧が思いがけない場所に忍び寄るような偶然性を大事にする。
+  // Rule04: DISSOLVE → 画面全体が均一に、白い光の霧に包まれて消えていく（消失が美しい）
+  // ノイズの粒立ちで「斑点」に見えるのを避け、素直な明度上昇＋霧色ブレンドで統一感のある消え方にする。
   if (dissolve > 0.01) {
     // 消える先は「画像の暗さ」ではなく、月光のような白い霧へ。
-    // ほんの少しだけ画像の色相を残しつつ、大部分は明るい霧色にする（完全な白飛びは避ける）
     let avgR=0, avgG=0, avgB=0, sampleCount=0;
     for (let i = 0; i < out.length; i += 400) {
       avgR += out[i]; avgG += out[i+1]; avgB += out[i+2]; sampleCount++;
@@ -260,41 +258,30 @@ function applyClairDeLune(preview) {
     const mistG = avgG * 0.15 + 248 * 0.85;
     const mistB = avgB * 0.15 + 250 * 0.85;
 
-    const cx = w/2, cy = h/2;
-    const maxDist = Math.sqrt(cx*cx + cy*cy);
+    // 画面全体に一律でかかる基本フェード量（dissolveがそのまま強さになる）
+    const baseFade = dissolve * 0.92;
 
-    // WOBBLEが低い時のための保険：ノイズがゼロでも周辺からうっすら消えるよう、
-    // ごく弱い放射バイアスだけ残す（強さは従来の1/4程度に抑え、形として感じさせない）
-    const edgeBias = 0.25;
+    // WOBBLE: ごく大きな1枚の雲だけを薄く重ねて、均一さの中にわずかな有機的ムラを残す
+    // （スケールを非常に大きくして「斑点」ではなく「大きな光のムラ」に見えるようにする）
+    const wobbleScale = 420; // 大きいほど模様が大きく・粒立たない
+    const wobbleStrength = wobble * 0.25;
 
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        // 雲状ノイズ（複数オクターブ）が消失の主役。中心からの距離ではなく、この濃淡そのものが「溶けやすさ」になる
-        const noise = cloudNoise(x, y); // 0-1
+        let fadeAmount = baseFade;
 
-        const dx = x - cx, dy = y - cy;
-        const edgeDist = Math.sqrt(dx*dx + dy*dy) / maxDist; // 0(中心)-1(角)：ごく弱いバイアスのみに使用
-
-        // ノイズを主軸に、わずかな周辺バイアスを混ぜる（画像端が完全にランダムだと不安定に見えるため）
-        let dissolveField = noise * (1 - edgeBias) + edgeDist * edgeBias;
-
-        // WOBBLEが高いほど、ノイズの効きをさらに強調してムラを大きくする
         if (wobble > 0.01) {
-          const wobbleNoise = cloudNoise(x + 3000, y + 3000);
-          dissolveField += (wobbleNoise - 0.5) * wobble * 0.4;
+          const bigNoise = smoothNoise2D(x, y, wobbleScale); // 0-1、非常に緩やかな1オクターブのみ
+          fadeAmount += (bigNoise - 0.5) * wobbleStrength;
         }
+        fadeAmount = Math.max(0, Math.min(1, fadeAmount));
 
-        // dissolveが強いほど、消える閾値が下がる（＝広い範囲が消えやすくなる）
-        const threshold = 1 - dissolve * 0.95;
-        if (dissolveField > threshold) {
-          const fadeAmount = Math.min(1, (dissolveField - threshold) / (1 - threshold + 0.001));
-          // イーズをかけて、消え際が急に切り替わらず柔らかく霧に溶けるようにする
-          const softFade = fadeAmount * fadeAmount * (3 - 2 * fadeAmount); // スムーズステップ
-          const i = (y*w+x)*4;
-          out[i]   = out[i]   * (1-softFade) + mistR * softFade;
-          out[i+1] = out[i+1] * (1-softFade) + mistG * softFade;
-          out[i+2] = out[i+2] * (1-softFade) + mistB * softFade;
-        }
+        // イーズをかけて、消え際が急に切り替わらず柔らかく霧に溶けるようにする
+        const softFade = fadeAmount * fadeAmount * (3 - 2 * fadeAmount); // スムーズステップ
+        const i = (y*w+x)*4;
+        out[i]   = out[i]   * (1-softFade) + mistR * softFade;
+        out[i+1] = out[i+1] * (1-softFade) + mistG * softFade;
+        out[i+2] = out[i+2] * (1-softFade) + mistB * softFade;
       }
     }
   }
