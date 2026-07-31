@@ -213,12 +213,22 @@ function applyClairDeLune(preview) {
 
   // ベースは「元画像とぼかし画像のブレンド」
   // contour=100%: ほぼ元画像 / contour=0%: 完全にぼかされた階調のみ
+  // WOBBLE[案1]: 場所ごとにcontourの効き方を揺らし、「輪郭が出る部分/階調に沈む部分」のムラを作る
   const out = new Uint8ClampedArray(src.length);
-  for (let i = 0; i < src.length; i += 4) {
-    out[i]   = src[i]   * contour + blurred[i]   * (1-contour);
-    out[i+1] = src[i+1] * contour + blurred[i+1] * (1-contour);
-    out[i+2] = src[i+2] * contour + blurred[i+2] * (1-contour);
-    out[i+3] = 255;
+  const wobbleContourScale = 200;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let localContour = contour;
+      if (wobble > 0.01) {
+        const noise = smoothNoise2D(x, y, wobbleContourScale); // 0-1
+        localContour = Math.max(0, Math.min(1, contour + (noise - 0.5) * wobble * 0.9));
+      }
+      const i = (y*w+x)*4;
+      out[i]   = src[i]   * localContour + blurred[i]   * (1-localContour);
+      out[i+1] = src[i+1] * localContour + blurred[i+1] * (1-localContour);
+      out[i+2] = src[i+2] * localContour + blurred[i+2] * (1-localContour);
+      out[i+3] = 255;
+    }
   }
 
   // Rule03由来: GLOW → 明るい部分（ハイライト）だけを抽出してさらに強くぼかし、加算合成
