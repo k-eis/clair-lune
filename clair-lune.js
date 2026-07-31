@@ -213,22 +213,12 @@ function applyClairDeLune(preview) {
 
   // ベースは「元画像とぼかし画像のブレンド」
   // contour=100%: ほぼ元画像 / contour=0%: 完全にぼかされた階調のみ
-  // WOBBLE[案1]: 場所ごとにcontourの効き方を揺らし、「輪郭が出る部分/階調に沈む部分」のムラを作る
   const out = new Uint8ClampedArray(src.length);
-  const wobbleContourScale = 200;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let localContour = contour;
-      if (wobble > 0.01) {
-        const noise = smoothNoise2D(x, y, wobbleContourScale); // 0-1
-        localContour = Math.max(0, Math.min(1, contour + (noise - 0.5) * wobble * 0.9));
-      }
-      const i = (y*w+x)*4;
-      out[i]   = src[i]   * localContour + blurred[i]   * (1-localContour);
-      out[i+1] = src[i+1] * localContour + blurred[i+1] * (1-localContour);
-      out[i+2] = src[i+2] * localContour + blurred[i+2] * (1-localContour);
-      out[i+3] = 255;
-    }
+  for (let i = 0; i < src.length; i += 4) {
+    out[i]   = src[i]   * contour + blurred[i]   * (1-contour);
+    out[i+1] = src[i+1] * contour + blurred[i+1] * (1-contour);
+    out[i+2] = src[i+2] * contour + blurred[i+2] * (1-contour);
+    out[i+3] = 255;
   }
 
   // Rule03由来: GLOW → 明るい部分（ハイライト）だけを抽出してさらに強くぼかし、加算合成
@@ -341,6 +331,23 @@ function applyClairDeLune(preview) {
           out[dstI+1] = out[dstI+1] * (1-opacity) + base[srcI+1] * opacity;
           out[dstI+2] = out[dstI+2] * (1-opacity) + base[srcI+2] * opacity;
         }
+      }
+    }
+  }
+
+  // Rule05 [案3]: WOBBLE単体で「秩序に対する揺らぎ」を作る
+  // 画面全体に緩やかな明暗の帯（大きな光と影のムラ）を重ねる。DISSOLVE等に依存しない独立効果。
+  if (wobble > 0.01) {
+    const wobbleScaleLarge = 260; // 大きな帯を作るためのノイズスケール
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const bigNoise = smoothNoise2D(x + 5000, y + 5000, wobbleScaleLarge); // 0-1
+        // -1〜+1の明暗変化に変換し、wobbleの強さでスケール
+        const lumShift = (bigNoise - 0.5) * 2 * wobble * 70;
+        const i = (y*w+x)*4;
+        out[i]   = Math.max(0, Math.min(255, out[i]   + lumShift));
+        out[i+1] = Math.max(0, Math.min(255, out[i+1] + lumShift));
+        out[i+2] = Math.max(0, Math.min(255, out[i+2] + lumShift));
       }
     }
   }
