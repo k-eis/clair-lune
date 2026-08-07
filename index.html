@@ -463,6 +463,27 @@ body.theme-juno .btn.secondary { background: transparent; color: var(--ink); bor
 body.theme-juno .canvas-badge { background: var(--accent2); color: #1c1c1c; border-color: var(--accent2); font-weight: 700; }
 body.theme-juno .version { color: var(--ink); opacity: 0.6; }
 
+/* ── フッターリンク（Philosophy / All Filters） ── */
+.footer-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.footer-links a {
+  flex: 1;
+  padding: 11px 14px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font: 500 10px/1 var(--sans);
+  letter-spacing: 0.03em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.footer-links a:hover { border-color: var(--accent); color: var(--accent); }
+
 @media (max-width: 860px) {
   .wrap { padding: 20px 16px 50px; }
   header { flex-direction: column; align-items: flex-start; gap: 10px; padding-bottom: 16px; margin-bottom: 20px; }
@@ -507,6 +528,8 @@ body.theme-juno .version { color: var(--ink); opacity: 0.6; }
   .profile-desc { font-size: 9.5px; }
   .btn { padding: 16px; font-size: 12px; }
   .action-buttons { gap: 10px; margin-top: 8px; }
+  .footer-links { flex-direction: column; gap: 8px; }
+  .footer-links a { padding: 14px; font-size: 11px; }
 }
 </style>
 </head>
@@ -657,6 +680,11 @@ body.theme-juno .version { color: var(--ink); opacity: 0.6; }
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="footer-links">
+    <a href="https://keis01.substack.com/p/k-eis-design-filter-000" target="_blank" rel="noopener">PHILOSOPHY • USAGE • LICENSE</a>
+    <a href="https://keis01.substack.com/s/k-eis-design-filter" target="_blank" rel="noopener">ALL FILTERS</a>
   </div>
 </div>
 
