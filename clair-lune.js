@@ -185,13 +185,63 @@ function boxBlur(data, w, h, radius) {
   return out;
 }
 
-function applyClairDeLune(preview) {
-  if (!originalImageData) return;
+// 高解像度書き出し用の高速ボックスブラー。
+// boxBlurと同じ結果（窓が画像の外にはみ出す端では、範囲内の画素だけで平均する）を、
+// スライディングウィンドウで計算する。半径が大きくなっても処理時間がほとんど増えない。
+function boxBlurFast(data, w, h, radius) {
+  if (radius < 1) return data;
+  const r = Math.max(1, Math.round(radius));
+  const out = new Uint8ClampedArray(data.length);
+  const temp = new Float32Array(data.length);
 
-  // プレビューモード：縮小データを使って高速に計算し、結果を実寸キャンバスへ拡大描画する
-  const useData = (preview && previewImageData) ? previewImageData : originalImageData;
+  // 横方向
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    let sr=0, sg=0, sb=0, sa=0;
+    const hi0 = Math.min(w - 1, r);
+    for (let sx = 0; sx <= hi0; sx++) {
+      const i = row + sx*4;
+      sr += data[i]; sg += data[i+1]; sb += data[i+2]; sa += data[i+3];
+    }
+    for (let x = 0; x < w; x++) {
+      const count = Math.min(w - 1, x + r) - Math.max(0, x - r) + 1;
+      const oi = row + x*4;
+      temp[oi] = sr/count; temp[oi+1] = sg/count; temp[oi+2] = sb/count; temp[oi+3] = sa/count;
+      const addX = x + r + 1, remX = x - r;
+      if (addX < w) { const i = row + addX*4; sr += data[i]; sg += data[i+1]; sb += data[i+2]; sa += data[i+3]; }
+      if (remX >= 0) { const i = row + remX*4; sr -= data[i]; sg -= data[i+1]; sb -= data[i+2]; sa -= data[i+3]; }
+    }
+  }
+  // 縦方向
+  for (let x = 0; x < w; x++) {
+    let sr=0, sg=0, sb=0, sa=0;
+    const hi0 = Math.min(h - 1, r);
+    for (let sy = 0; sy <= hi0; sy++) {
+      const i = (sy*w+x)*4;
+      sr += temp[i]; sg += temp[i+1]; sb += temp[i+2]; sa += temp[i+3];
+    }
+    for (let y = 0; y < h; y++) {
+      const count = Math.min(h - 1, y + r) - Math.max(0, y - r) + 1;
+      const oi = (y*w+x)*4;
+      out[oi] = sr/count; out[oi+1] = sg/count; out[oi+2] = sb/count; out[oi+3] = sa/count;
+      const addY = y + r + 1, remY = y - r;
+      if (addY < h) { const i = (addY*w+x)*4; sr += temp[i]; sg += temp[i+1]; sb += temp[i+2]; sa += temp[i+3]; }
+      if (remY >= 0) { const i = (remY*w+x)*4; sr -= temp[i]; sg -= temp[i+1]; sb -= temp[i+2]; sa -= temp[i+3]; }
+    }
+  }
+  return out;
+}
+
+// ── フィルター本体（解像度に依存しない純関数）
+// radiusScale：基準解像度（画面用キャンバス＝最大幅1200px）に対する横幅の比率。
+//   プレビュー=約0.27／画面表示=1／高解像度書き出し=1より大きい値
+//   1より大きい時だけ、ピクセル単位で決めている長さ（ぼかし・ノイズの大きさ・光のにじみ・残像のずれ）を
+//   この比率に合わせることで、どの解像度でも同じ見た目になる。
+function renderClairDeLune(useData, radiusScale) {
   const w = useData.width;
   const h = useData.height;
+  const px = Math.max(1, radiusScale);
+  const blur = radiusScale > 1 ? boxBlurFast : boxBlur;
 
   const contour = parseInt(contourSlider.value) / 100; // 0=完全階調(ぼかし強) / 1=輪郭くっきり(元画像)
   const glow = parseInt(glowSlider.value) / 100;
@@ -207,15 +257,14 @@ function applyClairDeLune(preview) {
 
   // Rule02: CONTOURが低いほど強くぼかす（輪郭より階調）
   // プレビュー中は画像自体が小さいので、blurRadiusも比率に合わせて縮小
-  const radiusScale = preview ? (w / outputCanvas.width) : 1;
   const blurRadius = (1 - contour) * 14 * Math.max(radiusScale, 0.35);
-  const blurred = boxBlur(src, w, h, blurRadius);
+  const blurred = blur(src, w, h, blurRadius);
 
   // ベースは「元画像とぼかし画像のブレンド」
   // contour=100%: ほぼ元画像 / contour=0%: 完全にぼかされた階調のみ
   // WOBBLE[案1]: 場所ごとにcontourの効き方を揺らし、「輪郭が出る部分/階調に沈む部分」のムラを作る
   const out = new Uint8ClampedArray(src.length);
-  const wobbleContourScale = 200;
+  const wobbleContourScale = 200 * px;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let localContour = contour;
@@ -244,7 +293,7 @@ function applyClairDeLune(preview) {
       highlightMap[i+2] = out[i+2] * highlight;
       highlightMap[i+3] = 255;
     }
-    const glowBlurred = boxBlur(highlightMap, w, h, 6 + glow*18);
+    const glowBlurred = blur(highlightMap, w, h, (6 + glow*18) * px);
     const glowStrength = glow * 0.9;
     for (let i = 0; i < out.length; i += 4) {
       out[i]   = Math.min(255, out[i]   + glowBlurred[i]   * glowStrength);
@@ -273,7 +322,7 @@ function applyClairDeLune(preview) {
 
     // WOBBLE: ごく大きな1枚の雲だけを薄く重ねて、均一さの中にわずかな有機的ムラを残す
     // （スケールを非常に大きくして「斑点」ではなく「大きな光のムラ」に見えるようにする）
-    const wobbleScale = 420; // 大きいほど模様が大きく・粒立たない
+    const wobbleScale = 420 * px; // 大きいほど模様が大きく・粒立たない
     const wobbleStrength = wobble * 0.25;
 
     for (let y = 0; y < h; y++) {
@@ -310,7 +359,7 @@ function applyClairDeLune(preview) {
 
       // ずらし幅：echoが強いほど、各レイヤーが少しずつ大きくずれる（変奏＝毎回わずかに違う）
       // ANGLE: ユーザーが指定した方向を基準に、レイヤーごとわずかに揺らぎを加える
-      const shiftAmount = echo * 26 * layerT;
+      const shiftAmount = echo * 26 * px * layerT;
       const shiftAngle = baseAngleRad + layer * 0.18 + pseudoRandom(layer * 17) * 0.25;
       const shiftX = Math.round(Math.cos(shiftAngle) * shiftAmount);
       const shiftY = Math.round(Math.sin(shiftAngle) * shiftAmount);
@@ -352,7 +401,19 @@ function applyClairDeLune(preview) {
     }
   }
 
-  const resultData = new ImageData(out, w, h);
+  return new ImageData(out, w, h);
+}
+
+function applyClairDeLune(preview) {
+  if (!originalImageData) return;
+
+  // プレビューモード：縮小データを使って高速に計算し、結果を実寸キャンバスへ拡大描画する
+  const useData = (preview && previewImageData) ? previewImageData : originalImageData;
+  const w = useData.width;
+  const h = useData.height;
+  // プレビュー中は画像自体が小さいので、blurRadiusも比率に合わせて縮小
+  const radiusScale = preview ? (w / outputCanvas.width) : 1;
+  const resultData = renderClairDeLune(useData, radiusScale);
 
   if (preview && previewImageData) {
     // 小さい画像を一旦オフスクリーンcanvasに描き、実寸まで拡大してからメインキャンバスへ
@@ -491,29 +552,87 @@ try {
 } catch(e) {}
 
 // ── 保存（iOS対応：オーバーレイ方式）
-downloadBtn.addEventListener('click', () => {
-  try {
-    const dataUrl = outputCanvas.toDataURL('image/png');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// 高解像度での書き出し
+// 画面上のキャンバスは軽さのため最大幅1200pxだが、保存時だけ元写真の解像度（長辺の上限あり）で
+// フィルターをかけ直す。スマホのメモリ対策として上限を設け、失敗したら小さいサイズで再試行する。
+const EXPORT_MAX_LONG_SIDE = 2400;
+const EXPORT_FALLBACK_LONG_SIDE = 1600;
 
-    if (isIOS) {
-      showSaveOverlay(dataUrl);
-    } else {
-      const link = document.createElement('a');
-      link.download = 'clair-de-lune.png';
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+function renderExportCanvas(longSide) {
+  const nw = originalImage.naturalWidth || originalImage.width;
+  const nh = originalImage.naturalHeight || originalImage.height;
+  const s = Math.min(1, longSide / Math.max(nw, nh));
+  const ew = Math.max(1, Math.round(nw * s));
+  const eh = Math.max(1, Math.round(nh * s));
+  if (ew <= outputCanvas.width) return null; // 画面用と同じかそれ以下なら、今のキャンバスをそのまま保存
+
+  const c = document.createElement('canvas');
+  c.width = ew; c.height = eh;
+  const cctx = c.getContext('2d');
+  cctx.imageSmoothingEnabled = true;
+  cctx.imageSmoothingQuality = 'high';
+  cctx.drawImage(originalImage, 0, 0, ew, eh);
+  const base = cctx.getImageData(0, 0, ew, eh);
+  const result = renderClairDeLune(base, ew / originalImageData.width);
+  cctx.putImageData(result, 0, 0);
+  return c;
+}
+
+downloadBtn.addEventListener('click', () => {
+  if (!originalImage) return;
+  // バッジの文言・表示状態を保存して、書き出しが終わったら元に戻す
+  const prevBadgeText = canvasBadge.textContent;
+  const prevBadgeDisplay = canvasBadge.style.display;
+  canvasBadge.textContent = '高解像度で書き出し中… EXPORTING';
+  canvasBadge.style.display = 'block';
+  downloadBtn.disabled = true;
+
+  const finish = () => {
+    canvasBadge.textContent = prevBadgeText;
+    canvasBadge.style.display = prevBadgeDisplay;
+    downloadBtn.disabled = false;
+  };
+
+  // バッジを表示してから重い処理に入る
+  setTimeout(() => {
+    try {
+      let exportCanvas = null;
+      for (const size of [EXPORT_MAX_LONG_SIDE, EXPORT_FALLBACK_LONG_SIDE]) {
+        try { exportCanvas = renderExportCanvas(size); break; }
+        catch (err) { console.warn('書き出しサイズを下げて再試行します:', size, err); exportCanvas = null; }
+      }
+      const target = exportCanvas || outputCanvas;
+
+      target.toBlob((blob) => {
+        finish();
+        if (!blob) {
+          alert('画像の保存に失敗しました。ブラウザを再読み込みしてもう一度お試しください。');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isIOS) {
+          showSaveOverlay(url);
+        } else {
+          const link = document.createElement('a');
+          link.download = 'clair-de-lune.png';
+          link.href = url;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+      }, 'image/png');
+    } catch (err) {
+      console.error('PNG保存に失敗しました:', err);
+      finish();
+      alert('画像の保存に失敗しました。ブラウザを再読み込みしてもう一度お試しください。');
     }
-  } catch (err) {
-    console.error('PNG保存に失敗しました:', err);
-    alert('画像の保存に失敗しました。ブラウザを再読み込みしてもう一度お試しください。');
-  }
+  }, 30);
 });
 
-function showSaveOverlay(dataUrl) {
+function showSaveOverlay(imageUrl) {
   const overlay = document.createElement('div');
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 9999;
@@ -523,7 +642,7 @@ function showSaveOverlay(dataUrl) {
     padding: 20px; box-sizing: border-box;
   `;
   const img = document.createElement('img');
-  img.src = dataUrl;
+  img.src = imageUrl;
   img.style.cssText = 'max-width: 100%; max-height: 75vh; border-radius: 2px;';
 
   const hint = document.createElement('p');
@@ -538,7 +657,7 @@ function showSaveOverlay(dataUrl) {
     border: 1px solid #666; border-radius: 2px;
     font-family: sans-serif; font-size: 13px; cursor: pointer;
   `;
-  closeBtn.addEventListener('click', () => overlay.remove());
+  closeBtn.addEventListener('click', () => { overlay.remove(); if (imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl); });
 
   overlay.appendChild(img);
   overlay.appendChild(hint);
